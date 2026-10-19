@@ -1,0 +1,14 @@
+{
+  "name": "busca-tierra",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deduped owner-financed and seller-financed listings within 40 miles of Fort Smith, Arkansas.",
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

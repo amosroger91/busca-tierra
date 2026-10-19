@@ -1,0 +1,173 @@
+{
+  "generatedAt": "2026-10-19T21:08:47.784Z",
+  "center": {
+    "name": "Fort Smith, Arkansas",
+    "latitude": 35.38592,
+    "longitude": -94.39855
+  },
+  "radiusMiles": 40,
+  "counts": {
+    "collected": 192,
+    "insideRadius": 192,
+    "deduped": 103,
+    "outsideRadius": 0,
+    "unlocated": 0
+  },
+  "sources": [
+    {
+      "id": "craigslist",
+      "status": "ok",
+      "requests": 24,
+      "scanned": 9,
+      "notes": "Fort Smith board search on sapi.craigslist.org, postal 72901, 40 miles. Post bodies confirm the financing phrase.",
+      "matched": 6
+    },
+    {
+      "id": "landcentury",
+      "status": "ok",
+      "requests": 27,
+      "scanned": 2545,
+      "notes": "Owner-finance catalog at landcentury.com/owner-finance-deals. Prices are interpreted from the published terms when the feed mixes cents and dollars.",
+      "matched": 0
+    },
+    {
+      "id": "landflip",
+      "status": "ok",
+      "requests": 87,
+      "scanned": 286,
+      "notes": "County pages that reach the search circle. leflore-county had no listings",
+      "matched": 7
+    },
+    {
+      "id": "landhub",
+      "status": "ok",
+      "requests": 317,
+      "scanned": 2506,
+      "notes": "Arkansas and Oklahoma list pages, then detail pages for pins inside the radius. Financing has to be in the property description.",
+      "matched": 7
+    },
+    {
+      "id": "landwatch",
+      "status": "ok",
+      "requests": 38,
+      "scanned": 901,
+      "notes": "https://www.landwatch.com owner-financing search for Arkansas and Oklahoma.",
+      "matched": 86
+    },
+    {
+      "id": "landandfarm",
+      "status": "ok",
+      "requests": 38,
+      "scanned": 901,
+      "notes": "https://www.landandfarm.com owner-financing search for Arkansas and Oklahoma.",
+      "matched": 86
+    },
+    {
+      "id": "landmodo",
+      "status": "ok",
+      "requests": 9,
+      "scanned": 216,
+      "notes": "Landmodo is an owner-financed land catalog. Arkansas and Oklahoma pages were filtered to the radius.",
+      "matched": 0
+    },
+    {
+      "id": "land.com",
+      "status": "blocked",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 403,
+      "notes": "https://www.land.com/Arkansas/all-land/ responded HTTP 403. The site refused a non-browser client, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "landsofamerica",
+      "status": "blocked",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 403,
+      "notes": "https://www.landsofamerica.com/Arkansas/ responded HTTP 403. The site refused a non-browser client, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "zillow",
+      "status": "no-adapter",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 200,
+      "notes": "https://www.zillow.com/fort-smith-ar/ responded HTTP 200. The page loaded, and this build has no parser for that markup.",
+      "matched": 0
+    },
+    {
+      "id": "loopnet",
+      "status": "blocked",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 403,
+      "notes": "https://www.loopnet.com/search/commercial-real-estate/fort-smith-ar/for-sale/ responded HTTP 403. The site refused a non-browser client, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "homes.com",
+      "status": "blocked",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 403,
+      "notes": "https://www.homes.com/fort-smith-ar/ responded HTTP 403. The site refused a non-browser client, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "realtor.com",
+      "status": "rate-limited",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 429,
+      "notes": "https://www.realtor.com/realestateandhomes-search/Fort-Smith_AR responded HTTP 429. The site rate-limited the request, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "redfin",
+      "status": "blocked",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 403,
+      "notes": "https://www.redfin.com/stingray/do/location-autocomplete?location=Fort%20Smith%2C%20AR&v=2 responded HTTP 403. The site refused a non-browser client, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "point2homes",
+      "status": "blocked",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 403,
+      "notes": "https://www.point2homes.com/US/Land-For-Sale/AR/Fort-Smith.html responded HTTP 403. The site refused a non-browser client, so it contributed no rows.",
+      "matched": 0
+    },
+    {
+      "id": "united-country",
+      "status": "no-adapter",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 200,
+      "notes": "https://www.unitedcountry.com/property-search?state=AR responded HTTP 200. The page loaded, and this build has no parser for that markup.",
+      "matched": 0
+    },
+    {
+      "id": "byowner",
+      "status": "no-adapter",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 200,
+      "notes": "https://www.byowner.com/property-for-sale/arkansas/fort-smith responded HTTP 200. The page loaded, and this build has no parser for that markup.",
+      "matched": 0
+    },
+    {
+      "id": "rehold",
+      "status": "empty",
+      "requests": 1,
+      "scanned": 0,
+      "httpStatus": 200,
+      "notes": "https://www.rehold.com/Fort+Smith+AR/for-sale responded HTTP 200. The response had no listing payload.",
+      "matched": 0
+    }
+  ]
+}
