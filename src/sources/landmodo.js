@@ -1,5 +1,5 @@
 import { decodeEntities, htmlToText } from "../html.js";
-import { extractTerms, parseAcres } from "../signals.js";
+import { classifyFinancing, extractTerms, parseAcres } from "../signals.js";
 import { normalizeState } from "../geocode.js";
 
 const STATES = [
@@ -35,13 +35,16 @@ export function parseLandmodoPage(html) {
     const placeMatch = place.match(/^(.*?),\s*([A-Z]{2})\s+(\d{5})?/);
     const excerpt = htmlToText(block.match(/<p class="bpad[\s\S]*?<\/p>/)?.[0] || "");
     const pin = pins.get(href.replace(/^\//, ""));
+    const financing = classifyFinancing(`${title}\n${excerpt}`);
     listings.push({
       source: "landmodo",
       sourceId: id || href,
       title: title || pin?.name || "",
       price: price ? Number(price.replace(/,/g, "")) : null,
       acres: parseAcres(`${title} ${excerpt}`),
-      financingSignal: "owner financing",
+      financingSignal: financing.label || "owner financing",
+      financingAssertion: financing.assertion === "explicit_offer" ? "explicit_offer" : "catalog_tagged",
+      financingEvidence: financing.evidence || "Landmodo owner-financed catalog",
       financingTerms: extractTerms(excerpt),
       address: "",
       city: placeMatch?.[1]?.trim() || "",
@@ -108,7 +111,7 @@ export async function searchLandmodo({ http, log, inside }) {
 
   return {
     id: "landmodo",
-    status: scanned ? "ok" : "blocked",
+    status: scanned ? "complete" : "blocked",
     requests,
     scanned,
     listings,

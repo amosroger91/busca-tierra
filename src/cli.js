@@ -33,7 +33,13 @@ const result = await runSearch({
 });
 
 console.log("");
-console.log(`${result.listings.length} properties written to ${option("--out", OUTPUT_CSV)}`);
+const outDir = path.dirname(path.resolve(root, option("--out", OUTPUT_CSV)));
+console.log(`${result.listings.length} properties with financing terms written to ${option("--out", OUTPUT_CSV)}`);
+if (result.report.counts.withoutTerms) {
+  console.log(`${result.report.counts.withoutTerms} offers left out because they published no down payment, monthly amount, or rate`);
+}
+console.log(`${result.candidates.length} catalog leads written to ${path.join(outDir, "candidates.csv")}`);
+console.log(`${result.review.length} review rows written to ${path.join(outDir, "review-queue.csv")}`);
 console.log(`Source report written to ${option("--report", OUTPUT_REPORT)}`);
 for (const source of result.report.sources) {
   console.log(`  ${source.id}: ${source.status}, matched ${source.matched ?? 0}`);

@@ -48,7 +48,34 @@ function pricesClose(left, right) {
   return Math.abs(left - right) / high <= 0.15;
 }
 
+function cityOf(listing) {
+  return String(listing.city || "").trim().toLowerCase();
+}
+
+function citiesConflict(left, right) {
+  const leftCity = cityOf(left);
+  const rightCity = cityOf(right);
+  return Boolean(leftCity && rightCity && leftCity !== rightCity);
+}
+
+function lotNumber(listing) {
+  const match = `${listing.address || ""} ${listing.title || ""}`.match(/\b(?:lot|tract)\s*#?\s*(\d+[a-z]?)\b/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+const GENERIC_TITLE = new Set(["vacant", "undeveloped", "homesite", "lot", "tract", "residential", "commercial"]);
+
+function distinctiveTokens(listing) {
+  const cityTokens = new Set(cityOf(listing).split(/\s+/).filter(Boolean));
+  return [...tokens(listing.title)].filter((token) => !cityTokens.has(token) && !GENERIC_TITLE.has(token));
+}
+
 function samePlace(left, right) {
+  if (citiesConflict(left, right)) return false;
+  const leftLot = lotNumber(left);
+  const rightLot = lotNumber(right);
+  if (leftLot && rightLot && leftLot !== rightLot) return false;
+
   const addressLeft = normalizeAddress(left.address);
   const addressRight = normalizeAddress(right.address);
   if (addressLeft.length >= 8 && addressRight.length >= 8 && addressLeft !== addressRight) return false;
@@ -65,12 +92,10 @@ function samePlace(left, right) {
   const miles = milesBetween(left.latitude, left.longitude, right.latitude, right.longitude);
   if (miles > 0.35) return false;
   if (!pricesClose(left.price, right.price)) return false;
-  const overlap = jaccard(tokens(left.title), tokens(right.title));
-  const sameCity =
-    left.city &&
-    right.city &&
-    left.city.toLowerCase() === right.city.toLowerCase();
-  return overlap >= 0.34 || (sameCity && overlap >= 0.2) || addressLeft.length >= 8;
+  const overlap = jaccard(distinctiveTokens(left), distinctiveTokens(right));
+  const sameShortAddress = addressLeft.length >= 5 && addressLeft === addressRight;
+  if (sameShortAddress) return true;
+  return overlap >= 0.5;
 }
 
 function richness(listing) {
@@ -84,12 +109,31 @@ function richness(listing) {
 }
 
 function prefer(current, incoming) {
+  const currentTime = Date.parse(current.listedAt || "") || 0;
+  const incomingTime = Date.parse(incoming.listedAt || "") || 0;
+  if (currentTime !== incomingTime) return incomingTime > currentTime ? incoming : current;
   return richness(incoming) > richness(current) ? incoming : current;
 }
+
+function earlierPrice(primary, secondary) {
+  const current = primary.price ?? secondary.price;
+  return [primary.previousPrice, secondary.previousPrice, primary.price, secondary.price]
+    .find((value) => Number.isFinite(value) && value !== current) ?? null;
+}
+
+const LOCATION_RANK = {
+  seller_provided_point: 4,
+  address_interpolation: 3,
+  listing_map_point: 2,
+  locality_centroid: 1,
+};
 
 function mergePair(left, right) {
   const primary = prefer(left, right);
   const secondary = primary === left ? right : left;
+  const located = (LOCATION_RANK[secondary.locationMethod] || 0) > (LOCATION_RANK[primary.locationMethod] || 0)
+    ? secondary
+    : primary;
   const urls = [primary.url, secondary.url, ...(primary.otherUrls || []), ...(secondary.otherUrls || [])]
     .filter(Boolean);
   const sources = [primary.source, secondary.source, ...(primary.sources || []), ...(secondary.sources || [])]
@@ -98,7 +142,13 @@ function mergePair(left, right) {
     ...secondary,
     ...primary,
     price: primary.price ?? secondary.price,
+    previousPrice: earlierPrice(primary, secondary),
+    financingAssertion: primary.financingAssertion === "explicit_offer" || secondary.financingAssertion === "explicit_offer"
+      ? "explicit_offer"
+      : primary.financingAssertion || secondary.financingAssertion,
+    financingEvidence: primary.financingEvidence || secondary.financingEvidence,
     acres: primary.acres ?? secondary.acres,
+    acresLabel: primary.acresLabel || secondary.acresLabel || "",
     address: primary.address || secondary.address,
     city: primary.city || secondary.city,
     county: primary.county || secondary.county,
@@ -108,6 +158,10 @@ function mergePair(left, right) {
     financingTerms: primary.financingTerms || secondary.financingTerms,
     listedAt: primary.listedAt || secondary.listedAt,
     propertyType: primary.propertyType || secondary.propertyType,
+    latitude: located.latitude ?? primary.latitude ?? secondary.latitude,
+    longitude: located.longitude ?? primary.longitude ?? secondary.longitude,
+    locationMethod: located.locationMethod || primary.locationMethod || secondary.locationMethod,
+    apn: primary.apn || secondary.apn,
     url: primary.url || secondary.url,
     otherUrls: [...new Set(urls.filter((url) => url !== (primary.url || secondary.url)))],
     sources: [...new Set(sources)],

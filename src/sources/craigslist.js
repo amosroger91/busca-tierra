@@ -89,6 +89,7 @@ function listingFromPost(item, page) {
     zip: located.zip || "",
     latitude: latMatch ? Number(latMatch[1]) : item.latitude,
     longitude: lonMatch ? Number(lonMatch[1]) : item.longitude,
+    locationMethod: latMatch || item.latitude != null ? "listing_map_point" : "",
     propertyType: "real estate",
     url: page?.url || postingUrl(item),
     listedAt: item.listedAt,
@@ -129,7 +130,7 @@ export async function searchCraigslist({ http, log, inside, radiusMiles }) {
   }
   return {
     id: "craigslist",
-    status: "ok",
+    status: "complete",
     requests,
     scanned: byId.size,
     listings,

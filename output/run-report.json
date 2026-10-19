@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-19T21:08:47.784Z",
+  "generatedAt": "2026-10-19T21:42:36.763Z",
   "center": {
     "name": "Fort Smith, Arkansas",
     "latitude": 35.38592,
@@ -9,14 +9,18 @@
   "counts": {
     "collected": 192,
     "insideRadius": 192,
-    "deduped": 103,
+    "deduped": 106,
+    "confirmed": 13,
+    "candidates": 82,
+    "review": 7,
+    "withoutTerms": 11,
     "outsideRadius": 0,
     "unlocated": 0
   },
   "sources": [
     {
       "id": "craigslist",
-      "status": "ok",
+      "status": "complete",
       "requests": 24,
       "scanned": 9,
       "notes": "Fort Smith board search on sapi.craigslist.org, postal 72901, 40 miles. Post bodies confirm the financing phrase.",
@@ -24,7 +28,7 @@
     },
     {
       "id": "landcentury",
-      "status": "ok",
+      "status": "complete",
       "requests": 27,
       "scanned": 2545,
       "notes": "Owner-finance catalog at landcentury.com/owner-finance-deals. Prices are interpreted from the published terms when the feed mixes cents and dollars.",
@@ -32,7 +36,7 @@
     },
     {
       "id": "landflip",
-      "status": "ok",
+      "status": "complete",
       "requests": 87,
       "scanned": 286,
       "notes": "County pages that reach the search circle. leflore-county had no listings",
@@ -40,7 +44,7 @@
     },
     {
       "id": "landhub",
-      "status": "ok",
+      "status": "complete",
       "requests": 317,
       "scanned": 2506,
       "notes": "Arkansas and Oklahoma list pages, then detail pages for pins inside the radius. Financing has to be in the property description.",
@@ -48,23 +52,29 @@
     },
     {
       "id": "landwatch",
-      "status": "ok",
+      "status": "partial",
       "requests": 38,
       "scanned": 901,
-      "notes": "https://www.landwatch.com owner-financing search for Arkansas and Oklahoma.",
+      "advertised": 953,
+      "unique": 901,
+      "stopReason": "repeated_page",
+      "notes": "/arkansas-land-for-sale/owner-financing stopped because page 21 repeated pageIndex 19; advertised 552",
       "matched": 86
     },
     {
       "id": "landandfarm",
-      "status": "ok",
+      "status": "partial",
       "requests": 38,
       "scanned": 901,
-      "notes": "https://www.landandfarm.com owner-financing search for Arkansas and Oklahoma.",
+      "advertised": 953,
+      "unique": 901,
+      "stopReason": "repeated_page",
+      "notes": "/search/arkansas-land-for-sale/owner-financing stopped because page 21 repeated pageIndex 19; advertised 552",
       "matched": 86
     },
     {
       "id": "landmodo",
-      "status": "ok",
+      "status": "complete",
       "requests": 9,
       "scanned": 216,
       "notes": "Landmodo is an owner-financed land catalog. Arkansas and Oklahoma pages were filtered to the radius.",
@@ -90,7 +100,7 @@
     },
     {
       "id": "zillow",
-      "status": "no-adapter",
+      "status": "no_adapter",
       "requests": 1,
       "scanned": 0,
       "httpStatus": 200,
@@ -117,11 +127,11 @@
     },
     {
       "id": "realtor.com",
-      "status": "rate-limited",
+      "status": "rate_limited",
       "requests": 1,
       "scanned": 0,
       "httpStatus": 429,
-      "notes": "https://www.realtor.com/realestateandhomes-search/Fort-Smith_AR responded HTTP 429. The site rate-limited the request, so it contributed no rows.",
+      "notes": "https://www.realtor.com/realestateandhomes-search/Fort-Smith_AR responded HTTP 429. The page loaded, and this build has no parser for that markup.",
       "matched": 0
     },
     {
@@ -144,7 +154,7 @@
     },
     {
       "id": "united-country",
-      "status": "no-adapter",
+      "status": "no_adapter",
       "requests": 1,
       "scanned": 0,
       "httpStatus": 200,
@@ -153,7 +163,7 @@
     },
     {
       "id": "byowner",
-      "status": "no-adapter",
+      "status": "no_adapter",
       "requests": 1,
       "scanned": 0,
       "httpStatus": 200,
@@ -162,11 +172,11 @@
     },
     {
       "id": "rehold",
-      "status": "empty",
+      "status": "empty_confirmed",
       "requests": 1,
       "scanned": 0,
       "httpStatus": 200,
-      "notes": "https://www.rehold.com/Fort+Smith+AR/for-sale responded HTTP 200. The response had no listing payload.",
+      "notes": "https://www.rehold.com/Fort+Smith+AR/for-sale responded HTTP 200. The page loaded, and this build has no parser for that markup.",
       "matched": 0
     }
   ]

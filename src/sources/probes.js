@@ -51,14 +51,14 @@ const PROBES = [
 
 function classify(result) {
   if (result.status === 403 || result.status === 401) return "blocked";
-  if (result.status === 429) return "rate-limited";
+  if (result.status === 429) return "rate_limited";
   if (result.status >= 400) return "error";
   const text = result.text || "";
   const hasListingMarkup = /application\/ld\+json|__NEXT_DATA__|property-card|listing-card/i.test(text);
   const mentions = (text.match(/owner financ/gi) || []).length;
-  if (mentions > 0 && hasListingMarkup) return "reachable";
-  if (text.length < 20000 && mentions === 0) return "empty";
-  return "no-adapter";
+  if (mentions > 0 && hasListingMarkup) return "no_adapter";
+  if (text.length < 20000 && mentions === 0) return "empty_confirmed";
+  return "no_adapter";
 }
 
 export async function probeSources({ http, log }) {

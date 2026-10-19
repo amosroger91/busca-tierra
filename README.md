@@ -42,7 +42,17 @@ npm test
 npm start
 ```
 
-The search writes `output/properties.csv` and `output/run-report.json`. A later run reuses `output/cache/`. Pass `--refresh` to request every page again. The first full search takes several minutes. A cached run is mostly disk reads plus any page that was not saved yet.
+The search writes four tables and a report:
+
+| File | Contents |
+| --- | --- |
+| `output/properties.csv` | Confirmed explicit offers inside the radius. Compatibility columns. |
+| `output/properties-v2.csv` | The same confirmed rows, plus assertion, evidence, price state, previous price, location method, and APN. |
+| `output/candidates.csv` | Inside-radius leads whose only financing evidence is a catalog or category tag. |
+| `output/review-queue.csv` | Confirmed or candidate rows whose pin is a city centroid, or that sit near the 40-mile line without a seller-provided point. |
+| `output/run-report.json` | Per-source status, request counts, and match counts. |
+
+A later run reuses `output/cache/`. Pass `--refresh` to request every page again. The first full search takes several minutes. A cached run is mostly disk reads plus any page that was not saved yet.
 
 ## Configuration
 
@@ -74,14 +84,15 @@ A radius that is missing, zero, or not a number exits with status 1 before any r
 
 ### What qualifies
 
-A row is kept when both of these are true:
+A confirmed row requires all of these:
 
-- The listing offers seller-held financing. Matching phrases are `owner will finance`, `seller will finance`, `owner will carry`, `seller will carry`, `owner financing` (and `financed` / `finance`), `seller financing`, `owner carry`, `will carry the note` (also mortgage, contract, balance, financing, or paper), `carry back`, `contract for deed`, `land contract`, `bond for deed`, `owner terms`, and `seller terms`.
+- Listing-specific text offers seller-held financing (`explicit_offer`). Matching phrases are `owner will finance`, `seller will finance`, `owner will carry`, `seller will carry`, `owner financing` (and `financed` / `finance`), `seller financing`, `owner carry`, `will carry the note` (also mortgage, contract, balance, financing, or paper), `carry back`, `contract for deed`, `land contract`, `bond for deed`, `owner terms`, and `seller terms`.
+- The listing states financing terms: a down payment, a monthly amount, a term length, or an interest rate. A phrase with none of those stays out of `properties.csv`. The run report counts those omissions as `withoutTerms`.
 - The pin is inside the radius. Distance is haversine miles from the Fort Smith center. Rows with no pin after geocoding are dropped.
 
-`no owner financing`, `without seller financing`, conventional loans, FHA, VA, and the word `homeowner` do not qualify. A pasture that "will carry 20 head" does not qualify. The search query `will carry` is still sent to Craigslist, and the stricter phrase list decides.
+`Owner financing is not available` and `no owner financing` are denials. `No credit check` does not negate an offer. Conventional loans, FHA, VA, and the word `homeowner` do not qualify. A pasture that "will carry 20 head" does not qualify. The search query `will carry` is still sent to Craigslist, and the stricter phrase list decides.
 
-These catalogs are owner-financed by themselves, so a row from them qualifies even when the card text omits the phrase: Land Century's owner-finance deals, LandWatch and LandAndFarm pages whose search is already `owner-financing`, and Landmodo.
+A marketplace owner-financing category, without that phrase on the listing itself, is `catalog_tagged`. Those leads go to `output/candidates.csv`. They are not confirmed results. Landmodo and Land Century rows with only the catalog behind them are handled the same way. A Land Century record that publishes its own down payment or monthly terms is an explicit offer.
 
 `financing_terms` keeps a down payment, a monthly amount, a term, and an interest rate when the text has them. `price` is the asking price in dollars. Land Century sometimes publishes cents. The price column uses the unit that agrees with the down payment and the monthly terms.
 
@@ -95,7 +106,7 @@ These catalogs are owner-financed by themselves, so a row from them qualifies ev
 | `landhub` | Arkansas and Oklahoma list pages, then detail pages for pins already inside the radius | The title, description, features, or directions contain a financing phrase. |
 | `landwatch` | Arkansas and Oklahoma `/owner-financing` result pages | The search itself is the signal. The pin must be inside the radius. |
 | `landandfarm` | The same owner-financing catalogs on LandAndFarm | Same rule as LandWatch. The two sites usually list the same tract and collapse to one CSV row. |
-| `landmodo` | Arkansas and Oklahoma owner-financed catalog pages, including the map pin on each card | Every card is owner-financed. The pin must be inside the radius. |
+| `landmodo` | Arkansas and Oklahoma owner-financed catalog pages, including the map pin on each card | A pin inside the radius is a catalog lead unless that card's own title or excerpt states the offer. |
 | `probes` | One URL each for Land.com, Lands of America, Zillow, LoopNet, Homes.com, Realtor.com, Redfin, Point2Homes, United Country, ByOwner, and Rehold | Status only. These probes do not add rows. |
 
 Landflip counties: Sebastian, Crawford, Franklin, Logan, and Scott in Arkansas, and Le Flore (both slug spellings), Sequoyah, Haskell, Adair, and Muskogee in Oklahoma. A city just outside the circle can still be fetched when its geocoded point is within 15 miles of the radius. The listing pin is the final gate.
@@ -139,11 +150,12 @@ Two long street addresses that differ stay as two rows. That keeps subdivision l
 
 | Status | Meaning |
 | --- | --- |
-| `ok` | The adapter parsed a response. `matched` can still be 0. |
+| `complete` | The adapter finished the partitions it requested. `matched` can still be 0. |
+| `partial` | Paging stopped early. LandWatch and LandAndFarm report `repeated_page` when a later page repeats an earlier `pageIndex` before the advertised count is reached. |
 | `blocked` | HTTP 401 or 403. |
-| `rate-limited` | HTTP 429. |
-| `empty` | A short page with no listing payload. |
-| `no-adapter` | The page loaded and this build has no parser for it. |
+| `rate_limited` | HTTP 429. |
+| `empty_confirmed` | A short page with no listing payload. |
+| `no_adapter` | The page loaded and this build has no parser for it. |
 | `error` | The adapter threw. The message is in `notes`. |
 
 `scanned` is how many listings the adapter looked at. `matched` is how many it handed to the radius step. `requests` counts HTTP calls, including cache hits.
@@ -184,6 +196,10 @@ Requests send `User-Agent: busca-tierra/1.0 (owner-finance property research; Fo
 
 The Census geocoder is tried first. Coordinates come back as `x` = longitude and `y` = latitude. Nominatim is the fallback, limited to the United States. Geocodes are stored in `output/cache/geocode.json`.
 
-The CSV committed with this repo was generated on 2026-10-19. That run kept 103 properties, from 2.1 miles to 39.9 miles. Source matches before dedupe were Craigslist 6, Landflip 7, Landhub 7, LandWatch 86, and LandAndFarm 86. Land Century scanned 2,545 owner-finance deals and Landmodo scanned 216 Arkansas and Oklahoma cards. Both were inside their catalogs and outside this circle. Landmodo's closest pin was about 67 miles away. Land.com, Lands of America, LoopNet, Homes.com, Redfin, and Point2Homes returned HTTP 403. Realtor.com returned HTTP 429. Zillow, United Country, and ByOwner returned a page this build does not parse. Rehold's Fort Smith page was empty. `npm start` replaces those two output files.
+`Contact for Price` stays an unknown asking price. A `$999 Down` line is a down payment. A decreased price keeps the current amount and the previous amount. Described coordinates are preferred over a city geocode, and both claims stay on the record when the page has them. The same street in two towns does not merge. A shared subdivision pin does not merge tracts that have no other identity.
+
+The October 19 baseline export had 103 rows before these evidence rules. `npm start` replaces the output files, and the confirmed count can be lower once catalog-only tags move to `candidates.csv`. LandWatch and LandAndFarm still advertise 552 Arkansas owner-financing listings and repeat the last page after 500 unique rows. That stop is `partial` with reason `repeated_page`. Oklahoma's 401 owner-financing listings were all retrieved on that saved run. Parcel geometry, flood, soil, elevation, MLS, and automated LandSearch collection are outside this release. LandSearch's terms require written permission before automated extraction.
+
+Land.com, Lands of America, LoopNet, Homes.com, Redfin, and Point2Homes returned HTTP 403 on the saved run. Realtor.com returned HTTP 429. Zillow, United Country, and ByOwner returned a page this build does not parse. Rehold's Fort Smith page was empty.
 
 The blocked marketplaces in the report need a browser session this app does not automate. Re-run with `--refresh` after a source starts answering.

@@ -1,5 +1,15 @@
-import { extractTerms, findFinancingSignal, parseAcres } from "../signals.js";
+import { classifyFinancing, extractTerms, parseAcres } from "../signals.js";
 import { normalizeState } from "../geocode.js";
+
+export function propertyLabels(property) {
+  if (Array.isArray(property.types) && property.types.some((label) => typeof label === "string")) {
+    return property.types.filter((label) => typeof label === "string" && label.trim());
+  }
+  if (Array.isArray(property.propertyTypes)) {
+    return property.propertyTypes.filter((label) => typeof label === "string" && label.trim());
+  }
+  return [];
+}
 
 const CATALOGS = [
   {
@@ -37,16 +47,24 @@ export function parseMarketplacePage(html, origin) {
   const listings = (search.propertyResults || []).map((property) => {
     const summary = String(property.executiveSummary || "");
     const title = String(property.title || "").trim();
-    const signal = ownerFinancing
-      ? "owner financing"
-      : findFinancingSignal(`${title}\n${summary}`);
+    const financing = classifyFinancing(`${title}\n${summary}`);
+    const assertion = financing.assertion === "explicit_denial"
+      ? "explicit_denial"
+      : financing.assertion === "explicit_offer"
+        ? "explicit_offer"
+        : ownerFinancing
+          ? "catalog_tagged"
+          : "unknown";
+    const labels = propertyLabels(property);
     return {
       source: origin.includes("landandfarm") ? "landandfarm" : "landwatch",
       sourceId: String(property.id || property.siteListingId || ""),
       title,
       price: Number(property.price) > 0 ? Number(property.price) : null,
       acres: Number(property.acres) > 0 ? Number(property.acres) : parseAcres(title),
-      financingSignal: signal || "",
+      financingSignal: assertion === "explicit_denial" ? "" : financing.label || (ownerFinancing ? "owner financing" : ""),
+      financingAssertion: assertion,
+      financingEvidence: financing.evidence || (ownerFinancing ? "owner-financing catalog filter" : ""),
       financingTerms: extractTerms(summary),
       address: String(property.address || "").trim(),
       city: String(property.city || "").trim(),
@@ -55,7 +73,8 @@ export function parseMarketplacePage(html, origin) {
       zip: String(property.zip || "").trim(),
       latitude: Number.isFinite(Number(property.latitude)) ? Number(property.latitude) : null,
       longitude: Number.isFinite(Number(property.longitude)) ? Number(property.longitude) : null,
-      propertyType: Array.isArray(property.propertyTypes) ? property.propertyTypes.join(", ") : "land",
+      propertyType: labels.join("; ") || "unknown",
+      locationMethod: Number.isFinite(Number(property.latitude)) ? "listing_map_point" : "",
       url: property.canonicalUrl ? `${origin}${property.canonicalUrl}` : origin,
       listedAt: property.lastUpdated || "",
     };
@@ -81,6 +100,8 @@ async function searchCatalog(catalog, { http, log, inside }) {
   let requests = 0;
   let scanned = 0;
   let blocked = 0;
+  let advertised = 0;
+  let repeated = false;
   const notes = [];
 
   for (const basePath of catalog.paths) {
@@ -93,6 +114,7 @@ async function searchCatalog(catalog, { http, log, inside }) {
       notes.push(`${basePath} HTTP ${first.status}`);
       continue;
     }
+    advertised += parsed.total;
     const pageCount = Math.min(80, Math.max(1, Math.ceil(parsed.total / Math.max(parsed.listings.length, 1))));
     const take = (page) => {
       let fresh = 0;
@@ -117,17 +139,30 @@ async function searchCatalog(catalog, { http, log, inside }) {
       if (!next?.listings.length) break;
       const batch = take(next);
       kept += batch.kept;
-      if (next.pageIndex != null && next.pageIndex < page - 1) break;
+      if (next.pageIndex != null && next.pageIndex < page - 1) {
+        repeated = true;
+        notes.push(`${basePath} stopped because page ${page} repeated pageIndex ${next.pageIndex}; advertised ${parsed.total}`);
+        break;
+      }
     }
     log(`${catalog.id} ${basePath}: ${parsed.total} listed, ${kept} inside the radius`);
   }
 
-  const status = listings.length || scanned ? "ok" : blocked === catalog.paths.length ? "blocked" : "empty";
+  const status = repeated
+    ? "partial"
+    : listings.length || scanned
+      ? "complete"
+      : blocked === catalog.paths.length
+        ? "blocked"
+        : "empty";
   return {
     id: catalog.id,
     status,
     requests,
     scanned,
+    advertised,
+    unique: seen.size,
+    stopReason: repeated ? "repeated_page" : "",
     listings,
     notes: notes.join("; ") || `${catalog.origin} owner-financing search for Arkansas and Oklahoma.`,
   };

@@ -13,7 +13,7 @@ function termTotal(terms) {
 /**
  * Land Century stores some prices in cents and some in dollars.
  * When the financing terms imply a payoff, pick the unit that lands nearer that payoff.
- * With no terms, a small tract priced above $150,000 per acre is treated as cents.
+ * A high price per acre is not evidence that the feed used cents.
  */
 export function interpretPrice(amount, hints = {}) {
   if (amount == null || amount === "") return null;
@@ -28,11 +28,6 @@ export function interpretPrice(amount, hints = {}) {
     const centError = Math.abs(asCents - expected) / expected;
     if (centError + 0.05 < dollarError && centError < 0.55) return roundDollars(asCents);
     if (dollarError <= centError && dollarError < 0.55) return roundDollars(asDollars);
-  }
-
-  const acres = Number(hints.acres);
-  if (Number.isFinite(acres) && acres > 0 && acres < 20) {
-    if (asDollars / acres > 150000 && asCents / acres < 80000) return roundDollars(asCents);
   }
   return roundDollars(asDollars);
 }

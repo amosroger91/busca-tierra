@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FORT_SMITH } from "./config.js";
-import { writeCsv } from "./csv.js";
+import { REVIEW_COLUMNS, V2_COLUMNS, writeCsv } from "./csv.js";
 import { dedupeListings } from "./dedupe.js";
 import { createGeocoder, normalizeState } from "./geocode.js";
 import { milesBetween, roundMiles } from "./geo.js";
@@ -13,6 +13,35 @@ import { searchLandhub } from "./sources/landhub.js";
 import { searchLandmodo } from "./sources/landmodo.js";
 import { searchLandAndFarm, searchLandWatch } from "./sources/costar.js";
 import { probeSources } from "./sources/probes.js";
+import { hasFinancingTerms } from "./signals.js";
+
+export function partitionListings(sorted) {
+  const listings = [];
+  const candidates = [];
+  const review = [];
+  let withoutTerms = 0;
+  for (const listing of sorted) {
+    const assertion = listing.financingAssertion || (listing.financingSignal ? "explicit_offer" : "unknown");
+    listing.financingAssertion = assertion;
+    const terms = hasFinancingTerms(listing);
+    const qualified = assertion === "explicit_offer" || assertion === "conditional_offer";
+    if (qualified && !terms) {
+      withoutTerms += 1;
+      continue;
+    }
+    const reasons = [];
+    if (listing.locationMethod === "locality_centroid") reasons.push("locality centroid is not a parcel point");
+    if (listing.miles >= 38 && listing.locationMethod !== "seller_provided_point" && listing.locationMethod !== "address_interpolation") {
+      reasons.push("inside the circle but near the boundary without a precise point");
+    }
+    if (reasons.length && terms) {
+      review.push({ ...listing, reason: reasons.join("; "), detail: listing.financingEvidence || "" });
+    }
+    if (qualified) listings.push(listing);
+    else if (assertion === "catalog_tagged") candidates.push(listing);
+  }
+  return { listings, candidates, review, withoutTerms };
+}
 
 const SEARCHES = {
   craigslist: searchCraigslist,
@@ -77,6 +106,7 @@ export async function runSearch(options) {
       if (hit) {
         listing.latitude = hit.latitude;
         listing.longitude = hit.longitude;
+        listing.locationMethod = listing.address ? "address_interpolation" : "locality_centroid";
       }
     }
     if (listing.latitude == null || listing.longitude == null) {
@@ -94,11 +124,17 @@ export async function runSearch(options) {
     insideRadius.push(listing);
   }
 
-  const listings = dedupeListings(insideRadius).sort(
+  const sorted = dedupeListings(insideRadius).sort(
     (left, right) => left.miles - right.miles || (left.price ?? Number.MAX_SAFE_INTEGER) - (right.price ?? Number.MAX_SAFE_INTEGER)
   );
+  const partitioned = partitionListings(sorted);
+  const { listings, candidates, review } = partitioned;
 
   await writeCsv(options.outFile, listings);
+  const directory = path.dirname(options.outFile);
+  await writeCsv(path.join(directory, "properties-v2.csv"), listings, V2_COLUMNS);
+  await writeCsv(path.join(directory, "candidates.csv"), candidates, V2_COLUMNS);
+  await writeCsv(path.join(directory, "review-queue.csv"), review, REVIEW_COLUMNS);
   const report = {
     generatedAt: new Date().toISOString(),
     center: FORT_SMITH,
@@ -106,7 +142,11 @@ export async function runSearch(options) {
     counts: {
       collected: collected.length,
       insideRadius: insideRadius.length,
-      deduped: listings.length,
+      deduped: sorted.length,
+      confirmed: listings.length,
+      candidates: candidates.length,
+      review: review.length,
+      withoutTerms: partitioned.withoutTerms,
       outsideRadius: outside,
       unlocated,
     },
@@ -117,5 +157,5 @@ export async function runSearch(options) {
   };
   await mkdir(path.dirname(options.reportFile), { recursive: true });
   await writeFile(options.reportFile, JSON.stringify(report, null, 2));
-  return { listings, report };
+  return { listings, candidates, review, report };
 }

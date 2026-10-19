@@ -43,6 +43,7 @@ export function parseSearchPage(html) {
       zip: String(row.zipcode || "").trim(),
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
+      locationMethod: Number.isFinite(latitude) && Number.isFinite(longitude) ? "listing_map_point" : "",
       propertyType: row.property_type || row.category || "land",
       url: links.has(id) ? `https://www.landhub.com${links.get(id)}` : "",
       listedAt: row.created_at || "",
@@ -122,7 +123,7 @@ export async function searchLandhub({ http, log, inside }) {
 
   return {
     id: "landhub",
-    status: "ok",
+    status: "complete",
     requests,
     scanned,
     listings,

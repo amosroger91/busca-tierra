@@ -1,5 +1,5 @@
 import { interpretPrice, parseTermHints } from "../money.js";
-import { parseAcres } from "../signals.js";
+import { classifyFinancing, parseAcres } from "../signals.js";
 import { normalizeState } from "../geocode.js";
 
 const DEALS_PAGE = "https://www.landcentury.com/owner-finance-deals";
@@ -7,6 +7,10 @@ const DEALS_PAGE = "https://www.landcentury.com/owner-finance-deals";
 export function listingFromProperty(property) {
   const terms = String(property.ownerFinanceTerms || "").replace(/\s+/g, " ").trim();
   const hints = parseTermHints(terms);
+  const financing = classifyFinancing(`${property.name || ""}\n${terms}`);
+  const assertion = financing.assertion === "explicit_offer" || hints.down || hints.monthly
+    ? "explicit_offer"
+    : "catalog_tagged";
   const acres = parseAcres(property.name || "");
   const state = normalizeState(property.stateRegion || "");
   const slug = property.slug || "";
@@ -19,7 +23,9 @@ export function listingFromProperty(property) {
     title: String(property.name || "").replace(/\s+/g, " ").trim(),
     price: interpretPrice(property.cashPrice, { ...hints, acres }),
     acres,
-    financingSignal: property.isOwnerFinance ? "owner financing" : "owner financing",
+    financingSignal: assertion === "explicit_offer" ? financing.label || "owner financing" : "owner financing",
+    financingAssertion: assertion,
+    financingEvidence: financing.evidence || (assertion === "catalog_tagged" ? "Land Century owner-finance catalog" : terms),
     financingTerms: terms,
     address: String(property.street || "").trim(),
     city: String(property.city || "").trim(),
@@ -77,7 +83,7 @@ export async function searchLandCentury({ http, log, inside }) {
 
   return {
     id: "landcentury",
-    status: "ok",
+    status: "complete",
     requests,
     scanned,
     listings,
