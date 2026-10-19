@@ -4,7 +4,9 @@ Owner-financed and seller-financed property listings within 40 miles of Fort Smi
 
 ## Overview
 
-Public land and real-estate sites do not share one search. This app queries the sources that answer a plain HTTP client, keeps listings whose own text offers owner or seller financing, drops anything outside a 40-mile circle around Fort Smith, and merges the same tract when it shows up on more than one site.
+Public land and real-estate sites do not share one search. This app queries every source that answers a plain HTTP client, keeps listings whose own text offers owner or seller financing, drops anything outside a 40-mile circle around Fort Smith, and merges the same tract when it shows up on more than one site.
+
+The result of a run is `output/properties.csv`. `output/run-report.json` records what each source returned, including sites that refused the request or had no parser. Rows are never invented for a source that did not answer.
 
 LandWatch, LandAndFarm, and Landmodo publish owner-financed catalogs and are parsed. Sites that refuse a non-browser client, including Land.com, Lands of America, and Zillow, are still requested. Their HTTP status is written to the run report and they do not add rows.
 
@@ -29,27 +31,33 @@ radius filter -> dedupe -> output/properties.csv
                          -> output/run-report.json
 ```
 
+Each source adapter returns listings plus a status. `src/run.js` geocodes any row that has an address and no pin, drops rows that still have no pin or sit outside the radius, dedupes, sorts by distance then price, and writes both files. A source that throws is recorded as `error` and the rest of the run continues.
+
 ## Quick start
+
+Node.js 20 or newer. `curl.exe` needs to be on `PATH`. Landflip, Land.com, and Lands of America are requested with curl because those hosts refuse Node's fetch. No `npm install` is required.
 
 ```powershell
 npm test
 npm start
 ```
 
-The search writes `output/properties.csv` and `output/run-report.json`. A later run reuses `output/cache/`. Pass `--refresh` to request every page again.
+The search writes `output/properties.csv` and `output/run-report.json`. A later run reuses `output/cache/`. Pass `--refresh` to request every page again. The first full search takes several minutes. A cached run is mostly disk reads plus any page that was not saved yet.
 
 ## Configuration
 
-No environment variables are required. `.env.example` is only a reminder of that.
+No environment variables are required. `.env.example` is only a reminder of that. Real secrets do not belong in this repo. The app does not log in and does not call n8n.
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
 | `--radius` | `40` | Miles from Fort Smith. The center is 35.38592, -94.39855. |
 | `--out` | `output/properties.csv` | CSV path. |
 | `--report` | `output/run-report.json` | Per-source status, request counts, and match counts. |
-| `--cache` | `output/cache` | Saved responses and geocodes. |
+| `--cache` | `output/cache` | Saved responses and geocodes. Git ignores this directory. |
 | `--refresh` | off | Ignore the cache and request again. |
 | `--sources` | `craigslist,landcentury,landflip,landhub,landwatch,landandfarm,landmodo,probes` | Comma-separated subset. |
+
+The center is the point used by the distance math. A degree of latitude here is about 69 miles. Flags are read from the working directory, so run the commands from the repo root.
 
 ## Usage
 
@@ -58,43 +66,124 @@ No environment variables are required. `.env.example` is only a reminder of that
 | `npm start` | Full search at the default 40-mile radius. |
 | `npm start -- --radius 25` | Same search, tighter circle. |
 | `npm start -- --sources craigslist,landcentury` | Query only those sources. |
-| `npm test` | Unit tests for distance, financing phrases, price units, and dedupe. |
+| `npm start -- --out output\fort-smith.csv --report output\fort-smith.json` | Write the files somewhere else. |
+| `npm start -- --refresh` | Bypass cached responses. |
+| `npm test` | Unit tests for distance, financing phrases, price units, address parsing, and dedupe. |
 
-CSV columns: `sources`, `title`, `price`, `acres`, `financing_signal`, `financing_terms`, `address`, `city`, `county`, `state`, `zip`, `latitude`, `longitude`, `miles_from_fort_smith`, `property_type`, `url`, `other_urls`, `listed_at`.
+A radius that is missing, zero, or not a number exits with status 1 before any request.
 
-A row is kept when the listing text contains an owner-financing phrase (`owner financing`, `seller will carry`, `contract for deed`, `land contract`, `carry back`, and the close variants) and the pin is inside the radius. "No owner financing" and bank products such as conventional or FHA financing do not qualify. Land Century's owner-finance catalog, LandWatch and LandAndFarm owner-financing searches, and Landmodo's owner-financed catalog are trusted as that phrase.
+### What qualifies
+
+A row is kept when both of these are true:
+
+- The listing offers seller-held financing. Matching phrases are `owner will finance`, `seller will finance`, `owner will carry`, `seller will carry`, `owner financing` (and `financed` / `finance`), `seller financing`, `owner carry`, `will carry the note` (also mortgage, contract, balance, financing, or paper), `carry back`, `contract for deed`, `land contract`, `bond for deed`, `owner terms`, and `seller terms`.
+- The pin is inside the radius. Distance is haversine miles from the Fort Smith center. Rows with no pin after geocoding are dropped.
+
+`no owner financing`, `without seller financing`, conventional loans, FHA, VA, and the word `homeowner` do not qualify. A pasture that "will carry 20 head" does not qualify. The search query `will carry` is still sent to Craigslist, and the stricter phrase list decides.
+
+These catalogs are owner-financed by themselves, so a row from them qualifies even when the card text omits the phrase: Land Century's owner-finance deals, LandWatch and LandAndFarm pages whose search is already `owner-financing`, and Landmodo.
+
+`financing_terms` keeps a down payment, a monthly amount, a term, and an interest rate when the text has them. `price` is the asking price in dollars. Land Century sometimes publishes cents. The price column uses the unit that agrees with the down payment and the monthly terms.
+
+### Sources
+
+| Source | What is read | How a row gets in |
+| --- | --- | --- |
+| `craigslist` | Fort Smith search API, postal 72901, one query per phrase, then each posting body | The title or the body has a financing phrase, and the pin is inside the radius. |
+| `landcentury` | The nationwide owner-finance catalog, 100 deals per page | `isOwnerFinance` or published terms, and the pin is inside the radius. |
+| `landflip` | County list pages, then the detail page | Counties that reach the circle, a financing phrase in the description, and a pin inside the radius. The county filter checkbox is ignored. |
+| `landhub` | Arkansas and Oklahoma list pages, then detail pages for pins already inside the radius | The title, description, features, or directions contain a financing phrase. |
+| `landwatch` | Arkansas and Oklahoma `/owner-financing` result pages | The search itself is the signal. The pin must be inside the radius. |
+| `landandfarm` | The same owner-financing catalogs on LandAndFarm | Same rule as LandWatch. The two sites usually list the same tract and collapse to one CSV row. |
+| `landmodo` | Arkansas and Oklahoma owner-financed catalog pages, including the map pin on each card | Every card is owner-financed. The pin must be inside the radius. |
+| `probes` | One URL each for Land.com, Lands of America, Zillow, LoopNet, Homes.com, Realtor.com, Redfin, Point2Homes, United Country, ByOwner, and Rehold | Status only. These probes do not add rows. |
+
+Landflip counties: Sebastian, Crawford, Franklin, Logan, and Scott in Arkansas, and Le Flore (both slug spellings), Sequoyah, Haskell, Adair, and Muskogee in Oklahoma. A city just outside the circle can still be fetched when its geocoded point is within 15 miles of the radius. The listing pin is the final gate.
+
+Craigslist queries are full words. The site does not prefix-match, so `owner financing` is searched on its own rather than as a fragment. Posting URLs are the canonical `/reo/d/{slug}/{id}.html` form.
+
+LandWatch and LandAndFarm share one page shape (`__SERVER_STATE__`). Prices on those pages are already dollars. Their Arkansas owner-financing pager repeats the last page after 500 of the 552 listings it advertises. Oklahoma's 401 owner-financing listings were all retrieved on the run that produced the CSV in this repo.
+
+### CSV columns
+
+Rows are sorted by `miles_from_fort_smith`, then by `price`.
+
+| Column | Meaning |
+| --- | --- |
+| `sources` | Sites that had this tract, separated by `; `. |
+| `title` | Listing title from the richest source. |
+| `price` | Asking price in dollars. Blank when the source had no price. |
+| `acres` | Acreage when the source or the text provided it. |
+| `financing_signal` | The phrase that qualified the row, such as `owner financing` or `contract for deed`. |
+| `financing_terms` | Down payment, monthly payment, term, and rate, joined with `; `. |
+| `address`, `city`, `county`, `state`, `zip` | Best address fields after the merge. State is the two-letter code. |
+| `latitude`, `longitude` | Pin used for the radius check. |
+| `miles_from_fort_smith` | Distance from 35.38592, -94.39855, rounded. |
+| `property_type` | Source type label, when there was one. |
+| `url` | Primary listing URL. |
+| `other_urls` | The other URLs for the same tract, separated by ` \| `. |
+| `listed_at` | Source timestamp, when the page had one. |
+
+### Dedupe
+
+Two rows become one when either of these is true:
+
+- Both street addresses normalize to the same string of at least 8 characters. `Highway` becomes `hwy`, `Street` becomes `st`, and similar shortenings are applied.
+- Either address is missing or shorter than that, the pins are within 0.35 miles, the prices are within 15 percent (a missing price counts as close), and the titles share enough words. The same city lowers the title overlap that is required.
+
+Two long street addresses that differ stay as two rows. That keeps subdivision lots apart when LandWatch or LandAndFarm drops every lot on one coordinate. The merged row keeps the richer address, terms, price, and title, and it unions `sources` and `other_urls`.
+
+### Run report
+
+`output/run-report.json` has the center, the radius, and counts for collected rows, rows inside the radius, deduped rows, rows outside the radius, and rows with no pin. Each source has:
+
+| Status | Meaning |
+| --- | --- |
+| `ok` | The adapter parsed a response. `matched` can still be 0. |
+| `blocked` | HTTP 401 or 403. |
+| `rate-limited` | HTTP 429. |
+| `empty` | A short page with no listing payload. |
+| `no-adapter` | The page loaded and this build has no parser for it. |
+| `error` | The adapter threw. The message is in `notes`. |
+
+`scanned` is how many listings the adapter looked at. `matched` is how many it handed to the radius step. `requests` counts HTTP calls, including cache hits.
 
 ## Project structure
 
 ```
 src/cli.js                  command line
 src/run.js                  source order, radius gate, dedupe, files
+src/config.js               Fort Smith center, radius, queries, counties
 src/http.js                 cached, spaced HTTP with a curl fallback
 src/geocode.js              Census geocoder, Nominatim fallback
+src/geo.js                  haversine miles and the bounding box
 src/signals.js              financing phrases, terms, acres, street address
 src/money.js                Land Century cents-versus-dollars prices
 src/dedupe.js               same street address, or a shared pin when the addresses do not differ
 src/csv.js                  CSV writer
+src/html.js                 entity decode and HTML-to-text
 src/sources/                Craigslist, Land Century, Landflip, Landhub, LandWatch, LandAndFarm, Landmodo, probes
 test/core.test.js           unit tests
 output/properties.csv       generated listing file
 output/run-report.json      what each source returned
+output/cache/               response cache, not committed
+docs/progress/              daily progress notes
 ```
 
 ## Tech stack
 
-- Node.js 20 or newer
+- Node.js 20 or newer, ES modules
 - No runtime dependencies
-- US Census geocoder and OpenStreetMap Nominatim for pins that a listing does not already include
+- `node --test` for the unit tests
+- US Census geocoder (`geocoding.geo.census.gov`) and OpenStreetMap Nominatim for pins that a listing does not already include
+- `curl.exe` for hosts that refuse Node's fetch
 
 ## Notes
 
-Requests are spaced per host and saved under `output/cache/`. Craigslist posting pages, Landflip listing pages, and Landhub detail pages are opened only for candidates already inside or near the circle.
+Requests send `User-Agent: busca-tierra/1.0 (owner-finance property research; Fort Smith AR)`. Each host is paced at about 350 milliseconds between uncached requests. Responses with status 200, 404, and 403 are cached. Cache hits skip the pause. Nominatim calls wait about 1.1 seconds, which matches that service's usage policy. The app does not solve CAPTCHAs and does not use a logged-in session.
 
-Land Century's feed mixes cent and dollar amounts. The price column uses the unit that agrees with the published down payment and monthly terms.
+The Census geocoder is tried first. Coordinates come back as `x` = longitude and `y` = latitude. Nominatim is the fallback, limited to the United States. Geocodes are stored in `output/cache/geocode.json`.
 
-Landflip coverage is the counties that reach the circle: Sebastian, Crawford, Franklin, Logan, and Scott in Arkansas, and Le Flore, Sequoyah, Haskell, Adair, and Muskogee in Oklahoma. A listing in one of those counties is kept only when its pin is inside the radius.
-
-LandWatch and LandAndFarm are read from their Arkansas and Oklahoma owner-financing result pages. Landmodo is read from its Arkansas and Oklahoma owner-financed catalog. Each of those catalogs is statewide, so only pins inside the circle are written to the CSV. Two listings with different street addresses stay separate even when the site pins both lots on the same coordinate. LandWatch's Arkansas owner-financing pager repeats its last page after 500 of the 552 listings it advertises, and LandAndFarm does the same. Oklahoma's 401 owner-financing listings were all retrieved.
+The CSV committed with this repo was generated on 2026-10-19. That run kept 103 properties, from 2.1 miles to 39.9 miles. Source matches before dedupe were Craigslist 6, Landflip 7, Landhub 7, LandWatch 86, and LandAndFarm 86. Land Century scanned 2,545 owner-finance deals and Landmodo scanned 216 Arkansas and Oklahoma cards. Both were inside their catalogs and outside this circle. Landmodo's closest pin was about 67 miles away. Land.com, Lands of America, LoopNet, Homes.com, Redfin, and Point2Homes returned HTTP 403. Realtor.com returned HTTP 429. Zillow, United Country, and ByOwner returned a page this build does not parse. Rehold's Fort Smith page was empty. `npm start` replaces those two output files.
 
 The blocked marketplaces in the report need a browser session this app does not automate. Re-run with `--refresh` after a source starts answering.
